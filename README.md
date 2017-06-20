@@ -1,5 +1,9 @@
 # GitLab Boilerplate Injector
 
+## Why???
+
+Read the blog post [here](https://www.trek10.com/blog/making-ci-easier-with-gitlab/) to get the background.
+
 ## What it does
 
 This is a tool to help you make the initial commit in new GitLab repos. This allows you to inject helpful files,
