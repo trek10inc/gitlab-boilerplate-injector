@@ -1,0 +1,32 @@
+{
+  "name": "gitlab-boilerplate-injector",
+  "version": "1.0.0",
+  "description": "A Serverless project to help inject boilerplate files like CI configs and .gitignore into GitLab repos",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trek10inc/gitlab-boilerplate-injector.git"
+  },
+  "keywords": [
+    "aws",
+    "serverless",
+    "gitlab",
+    "ci",
+    "continuous",
+    "integration"
+  ],
+  "author": "Rob Ribeiro <rribeiro@trek10.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/trek10inc/gitlab-boilerplate-injector/issues"
+  },
+  "homepage": "https://github.com/trek10inc/gitlab-boilerplate-injector#readme",
+  "dependencies": {
+    "axios": "^0.15.3",
+    "bluebird": "^3.5.0",
+    "json-stringify-safe": "^5.0.1"
+  }
+}

@@ -1,0 +1,131 @@
+variables:
+  SLS_VERSION: "1.14.0" # make sure this matches your pinned version (if you have one)!
+  SLS_YAML_DIR: "." # This is relative to repo root. If serverless.yml is in the repo root, this should be "."
+  AWS_CLI_DEFAULT_REGION: us-east-1
+  PROD_SLS_STAGE_NAME: prod
+  PROD1_REGION: us-east-1
+#  PROD2_REGION: us-west-2 # use this for setting up multiregion deploys along with additional deploy:production_X jobs below
+  PROD_ACCOUNT: "AWS Account Number Here!!!" # todo!!!
+  STAGING_SLS_STAGE_NAME: stage
+  STAGING_REGION: us-east-1
+  STAGING_ACCOUNT: "AWS Account Number Here!!!" # todo!!!
+  DEV_SLS_STAGE_NAME_BASE: dev
+  DEV_REGION: us-east-1
+  DEV_ACCOUNT: "AWS Account Number Here!!!" # todo!!!
+
+image: trek10/ci:3.4 # todo: swap in your CI docker image as needed
+
+cache:
+  key: ${CI_COMMIT_REF_NAME}
+  untracked: true
+  paths:
+    - ${SLS_YAML_DIR}/node_modules
+
+run_tests:
+  stage: test
+  script: |
+    if test -f package.json; then
+      npm install --loglevel error;
+      npm run test;
+    else
+      echo "no package.json found to run tests from";
+    fi
+
+.deployment_script: &deployment_script
+  stage: deploy
+  script: | # ${variable//-/} is a bash replacement that strips the hyphens from the contents of the variable. Needed for API Gateway.
+    echo "===== Stage => ${SLS_STAGE_NAME//-/}, Account => ${ACCOUNT}, Region => ${REGION} ====="
+    echo "===== checking for tag and presence in master branch => ${CI_COMMIT_TAG:-"(not a tag)"} ====="
+    ([ -z ${CI_COMMIT_TAG} ] || (git branch -r --contains `git rev-list -n 1 ${CI_COMMIT_TAG}` | grep master))
+    echo "===== installing serverless ====="
+    npm install -g serverless@${SLS_VERSION:-"latest"} --loglevel error
+    echo "===== assuming permissions => ${DEPLOYMENT_ROLE} ====="
+    KST=(`aws sts assume-role --role-arn ${DEPLOYMENT_ROLE} --role-session-name "deployment-${CI_PROJECT_NAME}" --query '[Credentials.AccessKeyId,Credentials.SecretAccessKey,Credentials.SessionToken]' --output text`)
+    unset AWS_SECURITY_TOKEN
+    export AWS_DEFAULT_REGION=${AWS_CLI_DEFAULT_REGION}
+    export AWS_ACCESS_KEY_ID=${KST[0]}
+    export AWS_SECRET_ACCESS_KEY=${KST[1]}
+    export AWS_SESSION_TOKEN=${KST[2]}
+    export AWS_SECURITY_TOKEN=${KST[2]}
+    echo "===== deploying to ${CI_ENVIRONMENT_NAME} environment ====="
+    cd ${SLS_YAML_DIR}
+    if test -f package.json; then
+      npm install --loglevel error;
+    fi
+    sls deploy -v -s ${SLS_STAGE_NAME//-/} --region ${REGION:-"us-east-1"}
+
+.production_variables: &production_variables
+  ACCOUNT: ${PROD_ACCOUNT}
+  DEPLOYMENT_ROLE: "arn:aws:iam::${PROD_ACCOUNT}:role/gitlab-ci-deployment"
+  SLS_STAGE_NAME: ${PROD_SLS_STAGE_NAME}
+  PRODUCTION: "true"
+
+deploy:production_1: &deploy_production
+  <<: *deployment_script
+  variables:
+    <<: *production_variables
+    REGION: ${PROD1_REGION}
+  artifacts:
+    paths:
+      - ${SLS_YAML_DIR}/.serverless
+    expire_in: 4 weeks
+  environment:
+    name: ${PROD_SLS_STAGE_NAME}
+    #url: https://${CI_COMMIT_REF_SLUG}.something.com
+  only:
+    - tags
+
+# multiregion deploy is done by reusing the production1 template with different regions
+#deploy:production_2:
+#  <<: *deploy_production
+#  variables:
+#    <<: *production_variables
+#    REGION: ${PROD2_REGION}
+
+deploy:staging:
+  <<: *deployment_script
+  variables:
+    ACCOUNT: ${STAGING_ACCOUNT}
+    REGION: ${STAGING_REGION}
+    DEPLOYMENT_ROLE: "arn:aws:iam::${STAGING_ACCOUNT}:role/gitlab-ci-deployment"
+    SLS_STAGE_NAME: ${STAGING_SLS_STAGE_NAME}
+  environment:
+    name: ${STAGING_SLS_STAGE_NAME}
+    #url: https://${CI_COMMIT_REF_SLUG}.something.com
+  only:
+    - master
+
+.dev_variables: &dev_variables
+  ACCOUNT: ${DEV_ACCOUNT}
+  REGION: ${DEV_REGION}
+  DEPLOYMENT_ROLE: "arn:aws:iam::${DEV_ACCOUNT}:role/gitlab-ci-deployment"
+  SLS_STAGE_NAME: ${DEV_SLS_STAGE_NAME_BASE}${CI_COMMIT_REF_SLUG} # stage name must be unique for each branch to prevent stacks from stomping on each other
+
+deploy:dev_branches:
+  <<: *deployment_script
+  variables:
+    <<: *dev_variables
+  environment:
+    name: ${DEV_SLS_STAGE_NAME_BASE}/${CI_COMMIT_REF_SLUG}
+    #url: https://${CI_COMMIT_REF_SLUG}.something.com
+    on_stop: stop_deploy:dev_branches
+  only:
+    - branches
+  except:
+    - master
+
+stop_deploy:dev_branches:
+  stage: deploy
+  script: |
+    sls remove -v -s ${SLS_STAGE_NAME//-/}
+  variables:
+    <<: *dev_variables
+    GIT_STRATEGY: none
+  when: manual
+  environment:
+    name: ${DEV_SLS_STAGE_NAME_BASE}/${CI_COMMIT_REF_SLUG}
+    action: stop
+  only:
+    - branches
+  except:
+    - master

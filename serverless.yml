@@ -1,0 +1,36 @@
+service: gitlab-boilerplate-injector
+
+custom:
+  emptystring: ""
+  false: false
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+  stage: dev
+  region: us-east-1
+  memorySize: 256
+  variableSyntax: '\${((env|self|opt|file|cf|s3)[:\(][ :a-zA-Z0-9._,\-\/\(\)]*?)}'
+#  vpc: # uncomment and fill in as needed
+#    securityGroupIds:
+#      - # todo!!!
+#    subnetIds:
+#      - # todo!!!
+  environment:
+    GITLAB_API_TOKEN: ${env:GITLAB_API_TOKEN}
+    GITLAB_SYSHOOK_TOKEN: ${env:GITLAB_SYSHOOK_TOKEN}
+    GITLAB_INSTANCE_ADDRESS: # todo!!!
+
+package:
+  include:
+    - injectables/**
+
+functions:
+  injectBoilerplate:
+    handler: handler.injectBoilerplate
+    environment:
+      PROD: ${env:PRODUCTION, self:custom.false}
+    events:
+      - http:
+          path: inject
+          method: post
