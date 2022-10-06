@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/trek10inc/gitlab-boilerplate-injector#readme",
   "dependencies": {
-    "axios": "^0.15.3",
+    "axios": "^0.21.3",
     "bluebird": "^3.5.0",
     "json-stringify-safe": "^5.0.1"
   }
